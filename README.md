@@ -1,4 +1,5 @@
 # BlackOutPDF
+![Logo BlackOutPDF](./images/BlackOutPDF.png)
 
 BlackOutPDF is a Python desktop application built with PyQt5 that allows users to load PDF files, blackout sensitive areas, apply OCR, and export secured PDFs with optional password protection.
 
