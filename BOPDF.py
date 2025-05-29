@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QWidget, QScrollArea, QLabel, QHBoxLayout,
     QInputDialog, QMessageBox, QComboBox, QLineEdit
 )
-from PyQt5.QtGui import QPainter, QPixmap, QColor
+from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint
 import pytesseract
 from PIL import Image
@@ -226,21 +226,35 @@ class BlackoutPDF(QMainWindow):
             for label in self.image_widgets:
                 page = doc[label.page_index]
 
+                # dimensions réelles (points PDF) et pixmap (pixels)
+                page_w, page_h = page.rect.width, page.rect.height
+                pix_w,  pix_h  = label.original_pixmap.width(), label.original_pixmap.height()
+
+                # facteurs d’échelle independants de la résolution choisie au rendu
+                sx = page_w / pix_w
+                sy = page_h / pix_h
+
                 for rect in label.rects:
-                    x0 = rect.x() * scale
-                    y0 = rect.y() * scale
-                    x1 = (rect.x() + rect.width()) * scale
-                    y1 = (rect.y() + rect.height()) * scale
+                    x0 = rect.x() * sx
+                    x1 = (rect.x() + rect.width()) * sx
+
+                    y0 = rect.y() * sy                          # haut du rectangle
+                    y1 = (rect.y() + rect.height()) * sy        # bas du rectangle
 
                     pdf_rect = fitz.Rect(x0, y0, x1, y1)
+                    page.add_redact_annot(pdf_rect, fill=(0, 0, 0))
 
-                    page.draw_rect(pdf_rect, color=(0, 0, 0), fill=(0, 0, 0))
+                page.apply_redactions()
 
-            if self.password:
-                doc.save(output_path, encryption=fitz.PDF_ENCRYPT_AES_256,
-                         owner_pw=self.password, user_pw=self.password)
-            else:
-                doc.save(output_path)
+            save_kwargs = {}
+            if self.password:  # chiffrement facultatif
+                save_kwargs.update({
+                    "encryption": fitz.PDF_ENCRYPT_AES_256,
+                    "owner_pw": self.password,
+                    "user_pw": self.password,
+                })
+
+            doc.save(output_path, garbage=4, deflate=True, clean=True, **save_kwargs)
 
             doc.close()
 
