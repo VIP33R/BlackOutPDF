@@ -4,12 +4,13 @@ import shutil
 import fitz  # PyMuPDF
 import subprocess
 import tempfile
+import math
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QPushButton,
     QVBoxLayout, QWidget, QScrollArea, QLabel, QHBoxLayout,
     QInputDialog, QMessageBox, QComboBox, QLineEdit, QColorDialog
 )
-from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen, QIcon
+from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen, QIcon, QPainterPath
 from PyQt5.QtCore import Qt, QRect, QPoint
 import pytesseract
 from PIL import Image
@@ -28,9 +29,21 @@ class CaviardableImage(QLabel):
         self.blackout_color = QColor(0, 0, 0, 180)
         self.setMinimumSize(pixmap.size())
         self.setPixmap(self.original_pixmap)
+        self.mode = "rect"
+        self.free_points = []
+        self.moving_rect_idx = None
+        self.resizing_rect_idx = None
+        self.polys = []
+        self.current_poly = []
 
+    # =========================================================
+    # CaviardableImage.mousePressEvent
+    # =========================================================
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() != Qt.LeftButton:
+            return
+
+        if self.mode == "rect":
             x = int(event.pos().x() / self.scale_factor)
             y = int(event.pos().y() / self.scale_factor)
             self.origin = QPoint(x, y)
@@ -38,19 +51,94 @@ class CaviardableImage(QLabel):
             self.drawing = True
             self.update()
 
+        elif self.mode == "free":
+            p = QPoint(int(event.pos().x() / self.scale_factor),
+                    int(event.pos().y() / self.scale_factor))
+            self.current_poly = [p]       # démarre un nouveau polygone
+            self.drawing = True
+            self.update()
+
+        elif self.mode == "hand":
+            pos = event.pos()
+            self.moving_rect_idx = self.resizing_rect_idx = None
+            for i, r in enumerate(self.rects):
+                s = QRect(int(r.x() * self.scale_factor), int(r.y() * self.scale_factor),
+                        int(r.width() * self.scale_factor), int(r.height() * self.scale_factor))
+                # coin bas-droit → redimension
+                if (s.bottomRight() - pos).manhattanLength() <= 10:
+                    self.resizing_rect_idx = i
+                    self.resize_origin = pos
+                    self.orig_rect = QRect(r)
+                    self.drawing = True
+                    break
+                # intérieur → déplacement
+                if s.contains(pos):
+                    self.moving_rect_idx = i
+                    self.move_origin = pos
+                    self.orig_rect = QRect(r)
+                    self.drawing = True
+                    break
+
+    # =========================================================
+    # CaviardableImage.mouseMoveEvent
+    # =========================================================
     def mouseMoveEvent(self, event):
-        if self.drawing:
+        if self.mode == "rect" and self.drawing:
             x = int(event.pos().x() / self.scale_factor)
             y = int(event.pos().y() / self.scale_factor)
             self.current_rect = QRect(self.origin, QPoint(x, y)).normalized()
             self.update()
 
+        elif self.mode == "free" and self.drawing:
+            p = QPoint(int(event.pos().x() / self.scale_factor),
+                    int(event.pos().y() / self.scale_factor))
+            self.current_poly.append(p)
+            self.update()
+
+        elif self.mode == "hand" and self.drawing:
+            if self.resizing_rect_idx is not None:
+                dx = (event.pos().x() - self.resize_origin.x()) / self.scale_factor
+                dy = (event.pos().y() - self.resize_origin.y()) / self.scale_factor
+                nr = QRect(self.orig_rect)
+                nr.setWidth(max(1, int(self.orig_rect.width() + dx)))
+                nr.setHeight(max(1, int(self.orig_rect.height() + dy)))
+                self.rects[self.resizing_rect_idx] = nr.normalized()
+                self.update()
+            elif self.moving_rect_idx is not None:
+                dx = (event.pos().x() - self.move_origin.x()) / self.scale_factor
+                dy = (event.pos().y() - self.move_origin.y()) / self.scale_factor
+                nr = QRect(self.orig_rect)
+                nr.translate(int(dx), int(dy))
+                self.rects[self.moving_rect_idx] = nr
+                self.update()
+
+
+
+    # =========================================================
+    # CaviardableImage.mouseReleaseEvent
+    # =========================================================
     def mouseReleaseEvent(self, event):
-        if self.drawing:
-            self.rects.append(self.current_rect)
+        if event.button() != Qt.LeftButton:
+            return
+
+        if self.mode == "rect" and self.drawing:
+            self.rects.append(self.current_rect.normalized())
             self.current_rect = QRect()
             self.drawing = False
             self.update()
+
+        elif self.mode == "free" and self.drawing:
+            if len(self.current_poly) > 2:          # au moins un triangle
+                self.polys.append(self.current_poly.copy())
+            self.current_poly.clear()
+            self.drawing = False
+            self.update()
+
+        elif self.mode == "hand" and self.drawing:
+            self.moving_rect_idx = None
+            self.resizing_rect_idx = None
+            self.drawing = False
+
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -63,6 +151,12 @@ class CaviardableImage(QLabel):
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(self.blackout_color)
+
+        for poly in self.polys:
+            scaled = [QPoint(int(pt.x()*self.scale_factor),
+                            int(pt.y()*self.scale_factor))
+                    for pt in poly]
+            painter.drawPolygon(*scaled)
 
         for rect in self.rects:
             scaled_rect = QRect(
@@ -82,6 +176,16 @@ class CaviardableImage(QLabel):
             )
             painter.drawRect(scaled_current)
 
+        # ----- aperçu temps-réel pour le tracé libre -------------------------------
+        if self.mode == "free" and self.drawing and self.current_poly:
+            painter.setPen(QPen(Qt.red, 2))
+            scaled = [QPoint(int(pt.x() * self.scale_factor),
+                            int(pt.y() * self.scale_factor))
+                    for pt in self.current_poly]
+            painter.drawPolyline(*scaled)
+            
+
+
     def zoom(self, factor):
         self.scale_factor *= factor
         new_size = self.original_pixmap.size() * self.scale_factor
@@ -90,10 +194,14 @@ class CaviardableImage(QLabel):
         self.update()
 
     def undo_last_rect(self):
-        if self.rects:
+        if self.mode == "free" and self.polys:
+            self.polys.pop()
+        elif self.rects:
             self.rects.pop()
-            self.update()
+        self.update()
 
+    def set_mode(self, mode):
+        self.mode = mode
 
 class BlackoutPDF(QMainWindow):
     def __init__(self):
@@ -134,7 +242,11 @@ class BlackoutPDF(QMainWindow):
         self.theme_selector = QComboBox()
         self.theme_selector.addItems(["Thème Clair", "Thème Sombre"])
         self.theme_selector.currentIndexChanged.connect(self.change_theme)
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems(["▭ Rectangle", "✏️ Libre", "✋ Main"])
+        self.mode_selector.currentIndexChanged.connect(self.mode_changed)
 
+        top_bar.addWidget(self.mode_selector)
         top_bar.addWidget(self.theme_selector)
         top_bar.addWidget(self.open_button)
         top_bar.addWidget(self.export_button)
@@ -153,6 +265,7 @@ class BlackoutPDF(QMainWindow):
         self.scroll_layout = QVBoxLayout()
         self.scroll_content.setLayout(self.scroll_layout)
         self.scroll_area.setWidget(self.scroll_content)
+        self.current_mode = "rect"          # mode actif par défaut
         layout.addWidget(self.scroll_area)
 
         container = QWidget()
@@ -243,17 +356,24 @@ class BlackoutPDF(QMainWindow):
                 sx = page_w / pix_w
                 sy = page_h / pix_h
 
+                # --- rectangles dessinés ---
                 for rect in label.rects:
                     x0 = rect.x() * sx
                     x1 = (rect.x() + rect.width()) * sx
+                    y0 = rect.y() * sy
+                    y1 = (rect.y() + rect.height()) * sy
+                    page.add_redact_annot(fitz.Rect(x0, y0, x1, y1), fill=self.caviard_rgb)
 
-                    y0 = rect.y() * sy                          # haut du rectangle
-                    y1 = (rect.y() + rect.height()) * sy        # bas du rectangle
+                # --- polygones libres (on redige leur bounding-box) ---
+                for poly in label.polys:
+                    xs = [pt.x() * sx for pt in poly]
+                    ys = [pt.y() * sy for pt in poly]
+                    box = fitz.Rect(min(xs), min(ys), max(xs), max(ys))
+                    page.add_redact_annot(box, fill=self.caviard_rgb)
 
-                    pdf_rect = fitz.Rect(x0, y0, x1, y1)
-                    page.add_redact_annot(pdf_rect, fill=self.caviard_rgb)
-
+                # appliquer toutes les redactions de la page une fois seulement
                 page.apply_redactions()
+
 
             save_kwargs = {}
             if self.password:  # chiffrement facultatif
@@ -348,6 +468,12 @@ class BlackoutPDF(QMainWindow):
             for w in self.image_widgets:
                 w.blackout_color = QColor(col.red(), col.green(), col.blue(), 180)
                 w.update()
+
+    def mode_changed(self, index):
+        modes = {0: "rect", 1: "free", 2: "hand"}
+        self.current_mode = modes.get(index, "rect")
+        for w in self.image_widgets:
+            w.set_mode(self.current_mode)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
