@@ -364,12 +364,52 @@ class BlackoutPDF(QMainWindow):
                     y1 = (rect.y() + rect.height()) * sy
                     page.add_redact_annot(fitz.Rect(x0, y0, x1, y1), fill=self.caviard_rgb)
 
-                # --- polygones libres (on redige leur bounding-box) ---
+                # --- polygones libres : on découpe finement la forme -----------------------
+                def slice_poly_to_rects(poly_pts, step=2):
+                    """
+                    Poly-remplissage complet :
+                    • balaye le polygone avec un pas vertical de <step> points (≈ 0,7 mm).
+                    • pour chaque bande horizontale [y, y+step], calcule les
+                        intersections de la ligne médiane avec les arêtes,
+                        puis loge un rectangle plein entre chaque paire d’intersections.
+                    """
+                    xs, ys = zip(*poly_pts)
+                    y_min, y_max = min(ys), max(ys)
+                    rects = []
+
+                    edges = list(zip(poly_pts, poly_pts[1:] + poly_pts[:1]))  # arêtes (x0,y0)->(x1,y1)
+
+                    y = y_min
+                    while y < y_max:
+                        y_next = min(y + step, y_max)
+                        y_mid = (y + y_next) / 2.0                # ligne d’échantillonnage
+
+                        inter = []
+                        for (x0, y0), (x1, y1) in edges:
+                            # sauter les segments horizontaux
+                            if y0 == y1:
+                                continue
+                            # ray-casting : la ligne horizontale croise-t-elle l’arête ?
+                            if (y0 <= y_mid < y1) or (y1 <= y_mid < y0):
+                                t = (y_mid - y0) / (y1 - y0)
+                                inter.append(x0 + t * (x1 - x0))
+
+                        inter.sort()
+                        for i in range(0, len(inter) - 1, 2):
+                            x_left, x_right = inter[i], inter[i + 1]
+                            if x_right > x_left:                  # sécurité
+                                rects.append(fitz.Rect(x_left, y, x_right, y_next))
+                        y = y_next
+
+                    return rects
+
+
                 for poly in label.polys:
-                    xs = [pt.x() * sx for pt in poly]
-                    ys = [pt.y() * sy for pt in poly]
-                    box = fitz.Rect(min(xs), min(ys), max(xs), max(ys))
-                    page.add_redact_annot(box, fill=self.caviard_rgb)
+                    # conversion vers coordonnées PDF
+                    pts_pdf = [(pt.x() * sx, pt.y() * sy) for pt in poly]
+                    for r in slice_poly_to_rects(pts_pdf, step=4):     # 4 pt ≈ 1,4 mm
+                        page.add_redact_annot(r, fill=self.caviard_rgb)
+
 
                 # appliquer toutes les redactions de la page une fois seulement
                 page.apply_redactions()
