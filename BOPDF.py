@@ -5,6 +5,7 @@ import fitz  # PyMuPDF
 import subprocess
 import tempfile
 import math
+import json 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QPushButton,
     QVBoxLayout, QWidget, QScrollArea, QLabel, QHBoxLayout,
@@ -15,6 +16,8 @@ from PyQt5.QtCore import Qt, QRect, QPoint
 import pytesseract
 from PIL import Image
 
+# importation des fonctions annexes
+from src.utils import *
 
 class CaviardableImage(QLabel):
     def __init__(self, pixmap, page_index):
@@ -112,8 +115,6 @@ class CaviardableImage(QLabel):
                 self.rects[self.moving_rect_idx] = nr
                 self.update()
 
-
-
     # =========================================================
     # CaviardableImage.mouseReleaseEvent
     # =========================================================
@@ -138,7 +139,6 @@ class CaviardableImage(QLabel):
             self.moving_rect_idx = None
             self.resizing_rect_idx = None
             self.drawing = False
-
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -184,8 +184,6 @@ class CaviardableImage(QLabel):
                     for pt in self.current_poly]
             painter.drawPolyline(*scaled)
             
-
-
     def zoom(self, factor):
         self.scale_factor *= factor
         new_size = self.original_pixmap.size() * self.scale_factor
@@ -204,6 +202,7 @@ class CaviardableImage(QLabel):
         self.mode = mode
 
 class BlackoutPDF(QMainWindow):
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BlackOutPDF")
@@ -213,6 +212,8 @@ class BlackoutPDF(QMainWindow):
         self.pdf_path = None
         self.image_widgets = []
         self.password = None
+        self.rsa_pub_path  = None     # PEM publique pour chiffrer
+        self.rsa_priv_path = None     # PEM privée  pour déchiffrer
 
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
@@ -238,6 +239,10 @@ class BlackoutPDF(QMainWindow):
         self.color_btn = QPushButton("🎨 Couleur")
         self.color_btn.clicked.connect(self.choose_color)
         self.caviard_rgb = (0, 0, 0)
+        self.pub_btn    = QPushButton("🗝️  Publique")
+        self.priv_btn   = QPushButton("🔑 Privée")
+        self.pub_btn.clicked.connect(self.pick_public_key)
+        self.priv_btn.clicked.connect(self.pick_private_key)
 
         self.theme_selector = QComboBox()
         self.theme_selector.addItems(["Thème Clair", "Thème Sombre"])
@@ -245,7 +250,11 @@ class BlackoutPDF(QMainWindow):
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["▭ Rectangle", "✏️ Libre", "✋ Main"])
         self.mode_selector.currentIndexChanged.connect(self.mode_changed)
-
+        self.restore_btn = QPushButton("🗃️ Restaurer PDF")
+        self.restore_btn.clicked.connect(self.restore_pdf)
+        top_bar.addWidget(self.restore_btn)
+        top_bar.addWidget(self.pub_btn)
+        top_bar.addWidget(self.priv_btn)
         top_bar.addWidget(self.mode_selector)
         top_bar.addWidget(self.theme_selector)
         top_bar.addWidget(self.open_button)
@@ -356,13 +365,37 @@ class BlackoutPDF(QMainWindow):
                 sx = page_w / pix_w
                 sy = page_h / pix_h
 
-                # --- rectangles dessinés ---
+                cipher_pub_pem = open(self.rsa_pub_path, "rb").read() if self.rsa_pub_path else None
+
                 for rect in label.rects:
-                    x0 = rect.x() * sx
-                    x1 = (rect.x() + rect.width()) * sx
-                    y0 = rect.y() * sy
-                    y1 = (rect.y() + rect.height()) * sy
-                    page.add_redact_annot(fitz.Rect(x0, y0, x1, y1), fill=self.caviard_rgb)
+                    x0, x1 = rect.x()*sx, (rect.x()+rect.width())*sx
+                    y0, y1 = rect.y()*sy, (rect.y()+rect.height())*sy
+                    box    = fitz.Rect(x0, y0, x1, y1)
+
+                    # ── texte sous le rectangle ────────────────────────────
+                    original_txt = page.get_text("text", clip=box)
+
+                    if cipher_pub_pem and (original_txt.strip() or True):
+                        # 1) capture « photo » de la zone (résolution 150 dpi)
+                        snap_pix   = page.get_pixmap(clip=box, dpi=150)
+                        snap_png   = snap_pix.tobytes("png")                       # bytes PNG
+
+                        # 2) on emballe tout dans le payload JSON
+                        payload = json.dumps({
+                            "rect": [x0, y0, x1, y1],                              # position
+                            "txt" : original_txt,                                  # texte brut
+                            "img" : base64.b64encode(snap_png).decode()            # snapshot
+                        })
+
+                        blob = hybrid_encrypt(cipher_pub_pem, payload)
+
+                        annot = page.add_text_annot(box.tl, "")
+                        annot.set_info(subject="CAVBLOB", content=blob)
+                        annot.update(opacity=0)        # totalement invisible
+
+                    # caviardage visuel
+                    page.add_redact_annot(box, fill=self.caviard_rgb)
+
 
                 # --- polygones libres : on découpe finement la forme -----------------------
                 def slice_poly_to_rects(poly_pts, step=2):
@@ -514,6 +547,106 @@ class BlackoutPDF(QMainWindow):
         self.current_mode = modes.get(index, "rect")
         for w in self.image_widgets:
             w.set_mode(self.current_mode)
+
+    def pick_public_key(self):
+        p,_ = QFileDialog.getOpenFileName(self, "Clé publique PEM", "", "PEM (*.pem)")
+        if p: self.rsa_pub_path = p
+
+    def pick_private_key(self):
+        p,_ = QFileDialog.getOpenFileName(self, "Clé privée PEM", "", "PEM (*.pem)")
+        if p: self.rsa_priv_path = p
+
+    def extract_original(self):
+        if not (self.pdf_path and self.rsa_priv_path):
+            QMessageBox.warning(self, "Manque clé/ PDF",
+                                "Sélectionnez d'abord le PDF et la clé *privée*.")
+            return
+
+        with open(self.rsa_priv_path, "rb") as fh:
+            priv_pem = fh.read()
+
+        doc = fitz.open(self.pdf_path)
+        recovered = []
+        for page in doc:
+            for annot in page.annots() or []:
+                if annot.info.get("subject") != "CAVBLOB":
+                    continue
+                blob = annot.info.get("content", "")
+                try:
+                    payload = json.loads(hybrid_decrypt(priv_pem, blob))
+                    rect    = fitz.Rect(*payload["rect"])
+
+                    # 1) repeindre la zone en blanc (on « efface » le masque noir recopié)
+                    dst_page.draw_rect(rect, fill=(1,1,1), overlay=True)
+
+                    # 2) recoller le snapshot d’origine
+                    img_bytes = base64.b64decode(payload["img"])
+                    dst_page.insert_image(
+                        rect, stream=img_bytes,
+                        keep_proportion=False, overlay=True
+                    )
+                except Exception:
+                    pass
+        doc.close()
+
+        if not recovered:
+            QMessageBox.information(self, "Aucun résultat",
+                                    "Rien n'a pu être déchiffré avec cette clé.")
+            return
+
+        out,_ = QFileDialog.getSaveFileName(self, "Enregistrer", "restaure.txt", "TXT (*.txt)")
+        if out:
+            with open(out, "w", encoding="utf-8") as f:
+                f.write("\n\n--- page break ---\n\n".join(recovered))
+            QMessageBox.information(self, "OK", f"Texte enregistré : {out}")
+
+    def restore_pdf(self):
+        if not (self.pdf_path and self.rsa_priv_path):
+            QMessageBox.warning(self, "Manque clé/PDF",
+                                "Chargez le PDF et la clé *privée* d’abord.")
+            return
+
+        with open(self.rsa_priv_path, "rb") as fh:
+            priv_pem = fh.read()
+
+        src = fitz.open(self.pdf_path)
+        dst = fitz.open()                       # PDF vierge
+        for pno, page in enumerate(src):
+            dst.new_page(width=page.rect.width, height=page.rect.height)
+            dst_page = dst[pno]
+
+            # on commence par recopier tout le contenu actuel (images, dessin, etc.)
+            dst_page.show_pdf_page(page.rect, src, pno)
+
+            # puis on regarde les blobs
+            for annot in page.annots() or []:
+                if annot.info.get("subject") != "CAVBLOB":
+                    continue
+                blob = annot.info.get("content", "")
+                try:
+                    payload   = json.loads(hybrid_decrypt(priv_pem, blob))
+                    rect      = fitz.Rect(*payload["rect"])
+
+                    # 1) recoller l’image d’origine (snapshot)
+                    img_bytes = base64.b64decode(payload["img"])
+                    dst_page.insert_image(
+                        rect,
+                        stream=img_bytes,
+                        keep_proportion=False,     # on étire exactement dans le rectangle
+                        overlay=True               # au-dessus de TOUT le contenu existant
+                    )
+                except Exception:
+                    pass
+
+        out, _ = QFileDialog.getSaveFileName(self, "Enregistrer PDF restauré",
+                                            "restaure.pdf", "PDF (*.pdf)")
+        if out:
+            dst.save(out, garbage=4, deflate=True)
+            QMessageBox.information(self, "OK",
+                                    f"PDF restauré enregistré :\n{out}")
+
+        src.close()
+        dst.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
