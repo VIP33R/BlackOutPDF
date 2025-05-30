@@ -63,7 +63,13 @@ python BOPDF.py
 ## Building a standalone executable with PyInstaller
 
 1. **Ensure your virtual environment is activated and you are in the project folder.**
-2. **Build the executable with icon (adjust the icon path accordingly):**
+
+2. **Build the spec file.**
+```
+   pyinstaller  .\BOPDF.py 
+```
+
+4. **Build the executable with icon (adjust the icon path accordingly):**
 ```
    pyinstaller --noconsole --onefile --icon=BOPDF.ico BOPDF.py
 ```
