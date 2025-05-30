@@ -65,7 +65,7 @@ python BOPDF.py
 1. **Ensure your virtual environment is activated and you are in the project folder.**
 2. **Build the executable with icon (adjust the icon path accordingly):**
 ```
-   pyinstaller --onefile --windowed --icon=BlackOutPDF.ico BOPDF.py
+   pyinstaller --noconsole --onefile --icon=BOPDF.ico BOPDF.py
 ```
 
 4. **After the build completes, the standalone executable will be in the dist/ folder:**
