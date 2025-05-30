@@ -3,3 +3,4 @@ PyMuPDF
 pytesseract
 Pillow
 math
+json
