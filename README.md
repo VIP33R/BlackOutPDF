@@ -8,23 +8,30 @@ BlackOutPDF is a Python desktop application built with PyQt5 that allows users t
 ## Features
 
 - Load and display PDF pages as images
-- Draw blackout rectangles on pages to censor sensitive content
+- Draw blackout rectangles to censor sensitive content (redaction)
+- Highlight areas with yellow marker
+- Insert signatures and stamps (from image files)
+- Add text boxes anywhere on the document
+- Add comment annotations
 - Zoom in/out on pages
-- Undo last blackout rectangle
-- OCR to automatically detect text areas
+- Undo last action (blackout, highlight, annotation, etc.)
+- OCR support to automatically detect and blackout text areas
+- Dark/Light theme toggle
 - Export blacked-out PDF with optional password protection
-- Convert PDF to Word document
+(all redacted areas are truly deleted from the PDF)
+- Multi-page PDF support
+
+
 
 ---
 
 ## Requirements
 
 - Python 3.7+
-- PyQt5
+- PyQt6
 - PyMuPDF (fitz)
-- pytesseract
 - Pillow
-- A suite (Word,OnlyOffice,LibreOffice... for PDF to Word conversion)
+- pytesseract
 - Tesseract OCR engine installed on your system
 
 ---
