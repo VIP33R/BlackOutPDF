@@ -64,7 +64,7 @@ sudo apt install libreoffice tesseract-ocr
 5. **Usage**
 Run the application:
 ```
-python BOPDF.py
+python blackoutpdf.py
 ```
 
 ## Building a standalone executable with PyInstaller
@@ -73,12 +73,12 @@ python BOPDF.py
 
 2. **Build the spec file.**
 ```
-   pyinstaller  .\BOPDF.py 
+   pyinstaller  .\blackoutpdf.py 
 ```
 
 4. **Build the executable with icon (adjust the icon path accordingly):**
 ```
-   pyinstaller --noconsole --onefile --icon=BOPDF.ico BOPDF.py
+   pyinstaller --noconsole --onefile --icon=BOPDF.ico blackoutpdf.py
 ```
 
 4. **After the build completes, the standalone executable will be in the dist/ folder:**
