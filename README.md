@@ -55,7 +55,7 @@
 
 - Après modification du code, build l’exécutable avec :
     ```bash
-    ./ultimate_build.sh
+    ./complete_build.sh
     ```
 - Tu obtiens `BlackOutPDF-x86_64.AppImage` prêt à distribuer !
 
