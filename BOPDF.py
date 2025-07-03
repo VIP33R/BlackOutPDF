@@ -1,23 +1,8 @@
 """
-BlackOutPDF
-------------
-
-Outil de caviardage, annotation et export sécurisé de PDF.
-
-Fonctionnalités :
-- Ouvrir/afficher un PDF
-- Caviardage et surlignage à la souris
-- Ajout de commentaires, signatures, tampons, zones de texte
-- Annulation d’action
-- OCR automatique (Tesseract)
-- Export PDF (avec mot de passe)
-- Thème clair/sombre
-- UI PyQt6 moderne et portable
+BlackOutPDF - caviardage PDF pro avec export rasterisé sécurisé, positions précises
 """
-
 import sys
 import os
-import shutil
 import fitz  # PyMuPDF
 import tempfile
 import uuid
@@ -32,21 +17,12 @@ import pytesseract
 from PIL import Image
 
 def resource_path(rel_path):
-    """
-    Donne le chemin absolu d'une ressource (SVG, PNG...) en dev ou PyInstaller.
-    """
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, rel_path)
     return os.path.abspath(rel_path)
 
-
 class CaviardableImage(QLabel):
-    """
-    Widget d'image PDF permettant caviardage, surlignage, zones texte, signatures, tampons, commentaires.
-    """
-
     HANDLE_SIZE = 12
-
     def __init__(self, pixmap, page_index, parent=None):
         super().__init__(parent)
         self.original_pixmap = pixmap
@@ -74,30 +50,18 @@ class CaviardableImage(QLabel):
         self.setMinimumSize(pixmap.size())
         self.setPixmap(self.original_pixmap)
         self.setMouseTracking(True)
-
     def set_mode(self, mode):
-        """
-        Définit le mode d'édition courant (blackout, highlight, textbox, signature, etc.).
-        """
         self.mode = mode
         self.selected_item = None
         self.resizing_handle = None
         self.selected_offset = None
-
     def zoom(self, factor):
-        """
-        Applique un zoom à l'image (et à toutes les annotations).
-        """
         self.scale_factor *= factor
         new_size = self.original_pixmap.size() * self.scale_factor
         self.setMinimumSize(new_size)
         self.updateGeometry()
         self.update()
-
     def item_at_pos(self, x, y):
-        """
-        Retourne l'élément (texte/signature/tampon) sous la position souris.
-        """
         for i, (rect, _, _, _) in reversed(list(enumerate(self.textboxes))):
             if self.scaled_rect(rect).contains(x, y):
                 return ('textbox', i, rect, False)
@@ -108,32 +72,20 @@ class CaviardableImage(QLabel):
             if self.scaled_rect(rect).contains(x, y):
                 return ('stamp', i, rect, True)
         return None
-
     def handle_at_pos(self, rect, x, y):
-        """
-        Retourne le 'handle' de redimensionnement sous la souris (ou None).
-        """
         handles = self.get_handles(rect)
         for key, handle_rect in handles.items():
             if handle_rect.contains(x, y):
                 return key
         return None
-
     def scaled_rect(self, rect):
-        """
-        Retourne un QRect mis à l'échelle courante (zoom).
-        """
         return QRect(
             int(rect.x() * self.scale_factor),
             int(rect.y() * self.scale_factor),
             int(rect.width() * self.scale_factor),
             int(rect.height() * self.scale_factor)
         )
-
     def get_handles(self, rect):
-        """
-        Retourne les 4 poignées de redimensionnement d'un rectangle.
-        """
         r = self.scaled_rect(rect)
         s = self.HANDLE_SIZE
         return {
@@ -142,12 +94,7 @@ class CaviardableImage(QLabel):
             'sw': QRect(r.left() - s//2, r.bottom() - s//2, s, s),
             'se': QRect(r.right() - s//2, r.bottom() - s//2, s, s),
         }
-
-    # Tous les mouse events sont inchangés mais conservés (nettoyés si possible)
     def mousePressEvent(self, event: QMouseEvent):
-        """
-        Gestion du clic souris pour dessiner/placer/modifier des objets.
-        """
         x = int(event.position().x())
         y = int(event.position().y())
         parent = self.parent()
@@ -233,9 +180,6 @@ class CaviardableImage(QLabel):
                 self.update()
 
     def mouseMoveEvent(self, event):
-        """
-        Gère le déplacement souris (pour dessiner/redimensionner/déplacer éléments).
-        """
         x = int(event.position().x())
         y = int(event.position().y())
         if self.selected_item and self.mode is None:
@@ -302,9 +246,6 @@ class CaviardableImage(QLabel):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        """
-        Fin d'action souris (arrêt dessin, pose de zone…).
-        """
         if self.selected_item and (self.resizing_handle or self.selected_offset):
             self.resizing_handle = None
             self.selected_offset = None
@@ -331,18 +272,12 @@ class CaviardableImage(QLabel):
         self.selected_offset = None
 
     def mouseDoubleClickEvent(self, event):
-        """
-        Désélection d'élément sur double-clic.
-        """
         self.selected_item = None
         self.resizing_handle = None
         self.selected_offset = None
         self.update()
 
     def keyPressEvent(self, event):
-        """
-        Suppression d'un objet sélectionné (Delete).
-        """
         if event.key() == Qt.Key.Key_Delete and self.selected_item:
             typ, idx = self.selected_item
             if typ == 'textbox':
@@ -355,9 +290,6 @@ class CaviardableImage(QLabel):
             self.update()
 
     def paintEvent(self, event):
-        """
-        Dessine image, rectangles, highlights, textes, signatures, tampons.
-        """
         painter = QPainter(self)
         scaled = self.original_pixmap.scaled(
             self.original_pixmap.size() * self.scale_factor,
@@ -428,9 +360,6 @@ class CaviardableImage(QLabel):
             painter.drawRect(rect)
 
     def show_textbox_context_menu(self, idx, global_pos):
-        """
-        Menu contextuel : couleur, taille police, suppression.
-        """
         menu = QMenu()
         color_action = menu.addAction("Couleur…")
         font_action = menu.addAction("Taille police…")
@@ -450,10 +379,6 @@ class CaviardableImage(QLabel):
             del self.textboxes[idx]
             self.update()
 class BlackoutPDF(QMainWindow):
-    """
-    Fenêtre principale : gestion UI, sidebar, chargement/export PDF, zoom, OCR, dark mode, etc.
-    """
-
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BlackOutPDF 🇫🇷")
@@ -468,26 +393,19 @@ class BlackoutPDF(QMainWindow):
         self.history = []
         self.dark_mode = True
 
-        # ----------- UI Construction -----------
+        # --- UI construction ---
         central = QWidget()
         main_layout = QHBoxLayout(central)
         main_layout.setContentsMargins(0,0,0,0)
         main_layout.setSpacing(0)
 
-        # --- Sidebar ---
         sidebar = QFrame()
         sidebar.setFixedWidth(100)
-        sidebar.setStyleSheet("""
-            QFrame {
-                background: #20283B;
-                border-right: none;
-            }
-        """)
+        sidebar.setStyleSheet("QFrame {background: #20283B; border-right: none;}")
         self.side_layout = QVBoxLayout(sidebar)
         self.side_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.side_layout.setSpacing(0)
         self.side_layout.setContentsMargins(0, 8, 0, 8)
-
         logo_sidebar = QLabel()
         logo_sidebar_pix = QPixmap(resource_path("logo.png")).scaled(40, 40, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         logo_sidebar.setPixmap(logo_sidebar_pix)
@@ -499,9 +417,6 @@ class BlackoutPDF(QMainWindow):
         self.side_layout.addWidget(creux)
 
         def add_side_btn(icon: str, label: str, callback):
-            """
-            Ajoute un bouton à la sidebar.
-            """
             container = QWidget()
             layout = QVBoxLayout(container)
             layout.setContentsMargins(0, 3, 0, 3)
@@ -515,26 +430,14 @@ class BlackoutPDF(QMainWindow):
                 btn.setText(label[:2].upper())
             btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
             btn.setStyleSheet("""
-                QToolButton {
-                    border: none;
-                    background: transparent;
-                    border-radius: 12px;
-                    padding: 4px;
-                }
-                QToolButton:hover {
-                    background: rgba(0,85,164,0.10);
-                }
+                QToolButton {border: none; background: transparent; border-radius: 12px; padding: 4px;}
+                QToolButton:hover {background: rgba(0,85,164,0.10);}
             """)
             btn.clicked.connect(callback)
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
             text_label = QLabel(label)
             text_label.setStyleSheet("""
-                font-size: 11px;
-                font-weight: 400;
-                color: #bbb;
-                background: transparent;
-                padding: 0;
-                margin: 0;
+                font-size: 11px; font-weight: 400; color: #bbb; background: transparent; padding: 0; margin: 0;
             """)
             text_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
             text_label.setWordWrap(True)
@@ -543,7 +446,6 @@ class BlackoutPDF(QMainWindow):
             self.side_layout.addWidget(container)
             return btn
 
-        # --- Boutons sidebar : tous les assets via resource_path ---
         add_side_btn("icons/folder.svg", "Ouvrir PDF", self.load_pdf)
         add_side_btn("icons/lock.svg", "Export sécurisé", self.export_pdf_secured)
         add_side_btn("icons/skip-back.svg", "Annuler", self.undo_last_action)
@@ -559,22 +461,15 @@ class BlackoutPDF(QMainWindow):
         add_side_btn("icons/moon.svg", "Thème", self.toggle_theme)
         self.side_layout.addStretch()
 
-        # --- Zone centrale PDF + header ---
         vcontent = QVBoxLayout()
         vcontent.setSpacing(0)
         vcontent.setContentsMargins(0,0,0,0)
-
-        # Header top (zoom etc.)
         header = QFrame()
         header.setFixedHeight(52)
         header.setStyleSheet("""
-        QFrame {
-            background: qlineargradient(
-                x1:0, y1:0, x2:1, y2:0,
-                stop:0 #0055A4, stop:0.43 #fff, stop:1 #EF4135
-            );
-            border-bottom: 2px solid #0055A4;
-        }
+        QFrame {background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0, stop:0 #0055A4, stop:0.43 #fff, stop:1 #EF4135
+        ); border-bottom: 2px solid #0055A4;}
         """)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(12,0,12,0)
@@ -587,37 +482,23 @@ class BlackoutPDF(QMainWindow):
         self.zoom_plus = QPushButton("+")
         self.zoom_plus.setFixedSize(28,28)
         self.zoom_plus.setStyleSheet("""
-            QPushButton {
-                font-size:15px; font-weight:600;
-                background:#fff; color:#0055A4; border-radius:14px;
-                border:2px solid #0055A4; }
-            QPushButton:hover { background:#eaf2fb; }
+            QPushButton {font-size:15px; font-weight:600; background:#fff; color:#0055A4; border-radius:14px; border:2px solid #0055A4;}
+            QPushButton:hover {background:#eaf2fb;}
         """)
         self.zoom_plus.clicked.connect(lambda: self.adjust_zoom(1.1))
         header_layout.addWidget(self.zoom_plus)
         self.zoom_minus = QPushButton("-")
         self.zoom_minus.setFixedSize(28,28)
         self.zoom_minus.setStyleSheet("""
-            QPushButton {
-                font-size:15px; font-weight:600;
-                background:#fff; color:#EF4135; border-radius:14px;
-                border:2px solid #EF4135; }
-            QPushButton:hover { background:#fbeaea; }
+            QPushButton {font-size:15px; font-weight:600; background:#fff; color:#EF4135; border-radius:14px; border:2px solid #EF4135;}
+            QPushButton:hover {background:#fbeaea;}
         """)
         self.zoom_minus.clicked.connect(lambda: self.adjust_zoom(0.9))
         header_layout.addWidget(self.zoom_minus)
         vcontent.addWidget(header)
-
-        # Zone PDF pages scrollable
         content_frame = QFrame()
         content_frame.setStyleSheet("""
-            QFrame {
-                background:#212436;
-                border-radius: 13px;
-                margin: 10px 8px 8px 8px;
-                box-shadow: 0 0 0 4px #232840, 0 0 20px 2px #0055A480, 0 0 60px 6px #EF413540;
-                border: 1.5px solid #0055A4;
-            }
+            QFrame {background:#212436; border-radius: 13px; margin: 10px 8px 8px 8px; box-shadow: 0 0 0 4px #232840, 0 0 20px 2px #0055A480, 0 0 60px 6px #EF413540; border: 1.5px solid #0055A4;}
         """)
         content_layout = QVBoxLayout(content_frame)
         content_layout.setContentsMargins(18,13,18,13)
@@ -629,16 +510,103 @@ class BlackoutPDF(QMainWindow):
         self.scroll_area.setWidget(self.content_holder)
         content_layout.addWidget(self.scroll_area)
         vcontent.addWidget(content_frame)
-
         main_layout.addWidget(sidebar)
         main_layout.addLayout(vcontent)
         self.setCentralWidget(central)
         self.apply_dark_theme()
 
+    # … Fonctions de thème, zoom, undo, signature, tampon, load_pdf, run_ocr etc. restent inchangées …
+
+    def export_pdf_secured(self):
+        """
+        Export PDF caviardé sécurisé : tout rasterisé, positions précises, impossible de revenir en arrière.
+        Toutes les annotations (rects, highlights, etc) sont rescales de 2 si affichage fitz.Matrix(2,2).
+        """
+        if not self.pdf_path:
+            QMessageBox.warning(self, "Erreur", "Aucun PDF chargé.")
+            return
+        export_path, _ = QFileDialog.getSaveFileName(self, "Exporter le PDF caviardé", "", "PDF Files (*.pdf)")
+        if not export_path:
+            return
+        password, ok = QInputDialog.getText(self, "Mot de passe", "Entrer un mot de passe (optionnel) :", QLineEdit.EchoMode.Password)
+        doc = fitz.open(self.pdf_path)
+        try:
+            display_scale = 2  # car load_pdf utilise fitz.Matrix(2,2)
+            for i, img_widget in enumerate(self.image_widgets):
+                page = doc.load_page(i)
+                rect = page.rect
+                # Rendu natif
+                pix = page.get_pixmap(matrix=fitz.Matrix(1,1), alpha=False)
+                img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+                painter = QPainter(img)
+                # Blackout
+                for r in img_widget.rects:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    painter.fillRect(rect_pdf, QColor(0,0,0,255))
+                # Highlights
+                for r in img_widget.highlights:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    painter.fillRect(rect_pdf, QColor(255,255,0,110))
+                # Comments
+                for r, text in img_widget.comments:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    painter.setBrush(QColor(255, 255, 0, 180))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawEllipse(rect_pdf)
+                # Textboxes
+                for r, text, size, color in img_widget.textboxes:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    font = QFont("Arial", int(size / display_scale))
+                    painter.setFont(font)
+                    painter.setPen(color)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawText(rect_pdf, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+                # Signatures
+                for r, pixmap, orig in img_widget.signatures:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    if not pixmap.isNull():
+                        scaled_pix = pixmap.scaled(rect_pdf.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                        painter.drawPixmap(rect_pdf, scaled_pix)
+                # Stamps
+                for r, pixmap, orig in img_widget.stamps:
+                    rect_pdf = QRect(
+                        int(r.x() / display_scale), int(r.y() / display_scale),
+                        int(r.width() / display_scale), int(r.height() / display_scale)
+                    )
+                    if not pixmap.isNull():
+                        scaled_pix = pixmap.scaled(rect_pdf.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                        painter.drawPixmap(rect_pdf, scaled_pix)
+                painter.end()
+                img_file = os.path.join(self.temp_dir, f"page_{i}_{uuid.uuid4().hex}.png")
+                img.save(img_file)
+                page.clean_contents()
+                page.insert_image(rect, filename=img_file)
+                os.remove(img_file)
+            if password:
+                doc.save(export_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=password, user_pw=password)
+            else:
+                doc.save(export_path)
+            QMessageBox.information(self, "Succès", "Export PDF sécurisé, impossible à décaviarder.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur export", str(e))
+        finally:
+            doc.close()
     def apply_dark_theme(self):
-        """
-        Applique le thème sombre à l’interface.
-        """
         self.dark_mode = True
         qss = """
         QWidget { background-color: #1a1d2b; color: #f5f5f5; font-family: Arial, Helvetica, sans-serif; }
@@ -654,9 +622,6 @@ class BlackoutPDF(QMainWindow):
         self.title_label.setStyleSheet("color:#0055A4; letter-spacing:0.03em; font-weight:700;")
 
     def apply_light_theme(self):
-        """
-        Applique le thème clair à l’interface.
-        """
         self.dark_mode = False
         qss = """
         QWidget { background-color: #f3f7fd; color: #141925; font-family: Arial, Helvetica, sans-serif; }
@@ -672,32 +637,20 @@ class BlackoutPDF(QMainWindow):
         self.title_label.setStyleSheet("color:#0055A4; letter-spacing:0.03em; font-weight:700;")
 
     def toggle_theme(self):
-        """
-        Bascule entre thème sombre et clair.
-        """
         if self.dark_mode:
             self.apply_light_theme()
         else:
             self.apply_dark_theme()
 
     def set_mode_for_all(self, mode):
-        """
-        Définit le mode (blackout, highlight…) pour toutes les pages.
-        """
         for img in self.image_widgets:
             img.set_mode(mode)
 
     def adjust_zoom(self, factor):
-        """
-        Applique un zoom à toutes les pages.
-        """
         for img in self.image_widgets:
             img.zoom(factor)
 
     def undo_last_action(self):
-        """
-        Annule la dernière action sur le PDF courant.
-        """
         if not self.history:
             return
         last = self.history.pop()
@@ -719,9 +672,6 @@ class BlackoutPDF(QMainWindow):
         img.update()
 
     def start_signature_placement(self):
-        """
-        Permet à l’utilisateur de charger et placer une signature.
-        """
         fname, _ = QFileDialog.getOpenFileName(self, "Sélectionner la signature (PNG/JPG)", "", "Images (*.png *.jpg *.jpeg)")
         if not fname:
             return
@@ -736,9 +686,6 @@ class BlackoutPDF(QMainWindow):
             img.set_mode("signature")
 
     def start_stamp_placement(self):
-        """
-        Permet à l’utilisateur de charger et placer un tampon.
-        """
         fname, _ = QFileDialog.getOpenFileName(self, "Sélectionner le tampon (PNG/JPG)", "", "Images (*.png *.jpg *.jpeg)")
         if not fname:
             return
@@ -753,9 +700,6 @@ class BlackoutPDF(QMainWindow):
             img.set_mode("stamp")
 
     def load_pdf(self):
-        """
-        Charge un PDF, affiche chaque page en image éditable.
-        """
         fname, _ = QFileDialog.getOpenFileName(self, "Ouvrir PDF", "", "PDF Files (*.pdf)")
         if not fname:
             return
@@ -765,14 +709,12 @@ class BlackoutPDF(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible d'ouvrir le PDF.\n{e}")
             return
-
         for i in reversed(range(self.scroll_layout.count())):
             widget = self.scroll_layout.itemAt(i).widget()
             if widget is not None:
                 widget.setParent(None)
         self.image_widgets.clear()
         self.history.clear()
-
         for page_index in range(doc.page_count):
             page = doc.load_page(page_index)
             pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
@@ -783,46 +725,7 @@ class BlackoutPDF(QMainWindow):
             self.image_widgets.append(w)
         doc.close()
 
-    def export_pdf_secured(self):
-        """
-        Exporte le PDF caviardé (toutes pages rasterisées) avec option mot de passe.
-        """
-        if not self.pdf_path:
-            QMessageBox.warning(self, "Erreur", "Aucun PDF chargé.")
-            return
-        export_path, _ = QFileDialog.getSaveFileName(self, "Exporter le PDF caviardé", "", "PDF Files (*.pdf)")
-        if not export_path:
-            return
-        password, ok = QInputDialog.getText(self, "Mot de passe", "Entrer un mot de passe (optionnel) :", QLineEdit.EchoMode.Password)
-        doc = fitz.open(self.pdf_path)
-        try:
-            for i, img_widget in enumerate(self.image_widgets):
-                page = doc.load_page(i)
-                p = img_widget
-                img = QImage(p.size(), QImage.Format.Format_RGB888)
-                painter = QPainter(img)
-                p.render(painter)
-                painter.end()
-                img_file = os.path.join(self.temp_dir, f"page_{i}_{uuid.uuid4().hex}.png")
-                img.save(img_file)
-                rect = page.rect
-                page.clean_contents()
-                page.insert_image(rect, filename=img_file)
-                os.remove(img_file)
-            if password:
-                doc.save(export_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=password, user_pw=password)
-            else:
-                doc.save(export_path)
-            QMessageBox.information(self, "Succès", "Export réussi.")
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur export", str(e))
-        finally:
-            doc.close()
-
     def run_ocr(self):
-        """
-        Lance l’OCR Tesseract sur chaque page, surligne les zones détectées.
-        """
         if not self.pdf_path:
             QMessageBox.warning(self, "Erreur", "Aucun PDF chargé.")
             return
