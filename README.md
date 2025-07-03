@@ -26,16 +26,6 @@
 
 ## 📦 Installation
 
-### **Téléchargement AppImage (recommandé)**
-
-1. Télécharge la dernière release [ici](https://github.com/VIP33R/BlackOutPDF/releases/latest)  
-   *(fichier : `BlackOutPDF-x86_64.AppImage`)*
-2. Rends-le exécutable :
-    ```bash
-    chmod +x BlackOutPDF-x86_64.AppImage
-    ./BlackOutPDF-x86_64.AppImage
-    ```
-3. *(Optionnel)* Place le fichier dans `~/Applications/` pour l'ajouter au menu
 
 ### **Build manuel (dev Python)**
 
