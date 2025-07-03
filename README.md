@@ -1,100 +1,113 @@
-# BlackOutPDF
-![Logo BlackOutPDF](./images/BlackOutPDF.png)
+# BlackOutPDF 🇫🇷
 
-BlackOutPDF is a Python desktop application built with PyQt5 that allows users to load PDF files, blackout sensitive areas, apply OCR, and export secured PDFs with optional password protection.
+![Logo BlackOutPDF](./BOPDF.png)
 
----
-
-## Features
-
-- Load and display PDF pages as images
-- Draw blackout rectangles to censor sensitive content (redaction)
-- Highlight areas with yellow marker
-- Insert signatures and stamps (from image files)
-- Add text boxes anywhere on the document
-- Add comment annotations
-- Zoom in/out on pages
-- Undo last action (blackout, highlight, annotation, etc.)
-- OCR support to automatically detect and blackout text areas
-- Dark/Light theme toggle
-- Export blacked-out PDF with optional password protection
-(all redacted areas are truly deleted from the PDF)
-- Multi-page PDF support
-
-
+**BlackOutPDF** est une application graphique pour Linux permettant de caviarder, surligner, commenter, signer, tamponner et exporter des PDF de façon sécurisée (avec ou sans mot de passe), 100% offline.
 
 ---
 
-## Requirements
+## ✨ Fonctionnalités principales
+
+- **Chargement de PDF** multi-pages
+- **Caviardage** (noircir) par sélection libre
+- **Surlignage** façon surligneur jaune
+- **Ajout de texte**, commentaires et annotations
+- **Insertion de signatures** (depuis image PNG/JPG)
+- **Ajout de tampons** personnalisés
+- **Zoom avant/arrière** sur toutes les pages
+- **Undo** (annulation de la dernière action)
+- **OCR automatique** (Tesseract)
+- **Export PDF sécurisé** (avec ou sans mot de passe, caviardage irréversible)
+- **Thème sombre / clair**
+- **Standalone : AppImage portable pour tout Linux**
+- **Multi-plateforme** (PyQt6, PyMuPDF, Pillow, Tesseract)
+
+---
+
+## 📦 Installation
+
+### **Téléchargement AppImage (recommandé)**
+
+1. Télécharge la dernière release [ici](https://github.com/VIP33R/BlackOutPDF/releases/latest)  
+   *(fichier : `BlackOutPDF-x86_64.AppImage`)*
+2. Rends-le exécutable :
+    ```bash
+    chmod +x BlackOutPDF-x86_64.AppImage
+    ./BlackOutPDF-x86_64.AppImage
+    ```
+3. *(Optionnel)* Place le fichier dans `~/Applications/` pour l'ajouter au menu
+
+### **Build manuel (dev Python)**
+
+- Cloner le repo :
+    ```bash
+    git clone https://github.com/VIP33R/BlackOutPDF.git
+    cd BlackOutPDF
+    ```
+- Créer un venv et installer les dépendances :
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+- Installer Tesseract OCR sur votre système :
+    ```bash
+    sudo apt install tesseract-ocr
+    ```
+- Lancer l’application en mode dev :
+    ```bash
+    python BOPDF.py
+    ```
+
+---
+
+## 🛠️ Compilation AppImage (avancé)
+
+- Après modification du code, build l’exécutable avec :
+    ```bash
+    ./ultimate_build.sh
+    ```
+- Tu obtiens `BlackOutPDF-x86_64.AppImage` prêt à distribuer !
+
+---
+
+## 💻 Raccourci Menu Linux
+
+Pour ajouter BlackOutPDF au menu de ton système :
+
+1. Crée `~/.local/share/applications/blackoutpdf.desktop`
+2. Exemple de contenu :
+    ```desktop
+    [Desktop Entry]
+    Name=BlackOutPDF
+    Exec=/chemin/vers/BlackOutPDF-x86_64.AppImage
+    Icon=/chemin/vers/BOPDF.png
+    Type=Application
+    Categories=Utility;Office;
+    MimeType=application/pdf;
+    ```
+
+---
+
+## 🧩 Dépendances
 
 - Python 3.7+
 - PyQt6
 - PyMuPDF (fitz)
 - Pillow
 - pytesseract
-- Tesseract OCR engine installed on your system
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (à installer sur le système)
 
 ---
 
-## Installation
+## 🗂️ Structure du projet
 
-1. **Clone the repository**
-
-```
-git clone https://github.com/VIP33R/BlackOutPDF.git
-cd BlackOutPDF
-```
-
-2. **Create and activate a virtual environment (recommended)**
-```
-python3 -m venv venv
-source venv/bin/activate
-```
-
-3. **Install Python dependencies**
-```pip install -r requirements.txt```
-
-4. **Make sure you have LibreOffice and Tesseract OCR installed on your system**
-*On Ubuntu/Debian*
-```
-sudo apt update
-sudo apt install libreoffice tesseract-ocr
-```
-
-5. **Usage**
-Run the application:
-```
-python blackoutpdf.py
-```
-
-## Building a standalone executable with PyInstaller
-
-1. **Ensure your virtual environment is activated and you are in the project folder.**
-
-2. **Build the spec file.**
-```
-   pyinstaller  .\blackoutpdf.py 
-```
-
-4. **Build the executable with icon (adjust the icon path accordingly):**
-```
-   pyinstaller --noconsole --onefile --icon=BOPDF.ico blackoutpdf.py
-```
-
-4. **After the build completes, the standalone executable will be in the dist/ folder:**
-   ```dist/BOPDF```
-
-5. **You can run the executable directly:**
-```./dist/BOPDF```
-
-
-## NOTES
-
-To protect the exported PDF with a password, you will be prompted during export.
-You can switch between light and dark themes from the UI.
-The OCR feature helps you automatically detect text blocks to blackout.
-Conversion to Word requires LibreOffice or a compatible suite installed on your system.
-
-
-
-
+```txt
+BlackOutPDF/
+├── BOPDF.py             # Code source principal
+├── icons/               # Icônes SVG
+├── BOPDF.png            # Logo principal
+├── dist/                # Binaire PyInstaller
+├── ultimate_build.sh    # Script packaging AppImage (clean + build)
+├── BlackOutPDF.AppDir/  # Structure temporaire AppImage
+├── ...
