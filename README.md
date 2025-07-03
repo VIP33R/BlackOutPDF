@@ -1,4 +1,4 @@
-# BlackOutPDF 🇫🇷
+# BlackOutPDF 
 
 ![Logo BlackOutPDF](./BOPDF.png)
 
@@ -6,7 +6,7 @@
 
 ---
 
-## ✨ Fonctionnalités principales
+## Fonctionnalités principales
 
 - **Chargement de PDF** multi-pages
 - **Caviardage** (noircir) par sélection libre
@@ -24,7 +24,7 @@
 
 ---
 
-## 📦 Installation
+## Installation
 
 
 ### **Build manuel (dev Python)**
@@ -51,7 +51,7 @@
 
 ---
 
-## 🛠️ Compilation AppImage (avancé)
+## Compilation AppImage (avancé)
 
 - Après modification du code, build l’exécutable avec :
     ```bash
@@ -61,7 +61,7 @@
 
 ---
 
-## 💻 Raccourci Menu Linux
+## Raccourci Menu Linux
 
 Pour ajouter BlackOutPDF au menu de ton système :
 
@@ -79,7 +79,7 @@ Pour ajouter BlackOutPDF au menu de ton système :
 
 ---
 
-## 🧩 Dépendances
+## Dépendances
 
 - Python 3.7+
 - PyQt6
@@ -90,7 +90,7 @@ Pour ajouter BlackOutPDF au menu de ton système :
 
 ---
 
-## 🗂️ Structure du projet
+## Structure du projet
 
 ```txt
 BlackOutPDF/
