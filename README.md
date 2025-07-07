@@ -98,6 +98,6 @@ BlackOutPDF/
 ├── icons/               # Icônes SVG
 ├── BOPDF.png            # Logo principal
 ├── dist/                # Binaire PyInstaller
-├── ultimate_build.sh    # Script packaging AppImage (clean + build)
+├── complete_build.sh    # Script packaging AppImage (clean + build)
 ├── BlackOutPDF.AppDir/  # Structure temporaire AppImage
 ├── ...
